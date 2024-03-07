@@ -31,23 +31,23 @@ struct OutGoingData {
 namespace nlohmann {
 template <>
 struct adl_serializer<InComingData> {
-    static auto from_json(const json& j) -> InComingData { return InComingData{j.at("name").get<std::string>()}; }
-    static auto to_json(json& j, const InComingData& p) -> void { j = json{{"name", p.name}}; }
+    static auto from_json(const json& j) -> InComingData { return InComingData{j.at("Name").get<std::string>()}; }
+    static auto to_json(json& j, const InComingData& p) -> void { j = json{{"Name", p.name}}; }
 };
 
 template <>
 struct adl_serializer<OutGoingData> {
-    static auto from_json(const json& j) -> OutGoingData { return OutGoingData{j.at("name").get<std::string>()}; }
-    static auto to_json(json& j, const OutGoingData& p) -> void { j = json{{"name", p.name}}; }
+    static auto from_json(const json& j) -> OutGoingData { return OutGoingData{j.at("Name").get<std::string>()}; }
+    static auto to_json(json& j, const OutGoingData& p) -> void { j = json{{"Name", p.name}}; }
 };
 }  // namespace nlohmann
 
 auto server_service(zmq::context_t& context) -> void
 {
     zmq::socket_t socket(context, zmq::socket_type::rep);
+    socket.bind("tcp://*:5555");
     auto timeout = std::chrono::milliseconds{1000};
     socket.set(zmq::sockopt::rcvtimeo, static_cast<int>(timeout.count()));
-    socket.bind("tcp://*:5555");
 
     while (is_running()) {
         try {
@@ -57,22 +57,28 @@ auto server_service(zmq::context_t& context) -> void
                 std::cerr << "[Timeout] receiving incoming data" << std::endl;
                 continue;
             }
-
-            const auto* first = request.data<std::uint8_t>();
-
-            const auto deserialized = json::from_msgpack(request.data<std::uint8_t>(), first + request.size());
+            const auto deserialized = json::from_msgpack(request.to_string());
             const auto incoming     = deserialized.get<InComingData>();
 
             std::cout << "Received request: " << incoming.name << std::endl;
 
-            // send reply with echo
+            // // send reply with echo
             const auto outgoing   = OutGoingData{incoming.name};
             const auto serialized = json::to_msgpack(outgoing);
             auto reply            = zmq::message_t(serialized.begin(), serialized.end());
             socket.send(reply, zmq::send_flags::none);
         }
         catch (const zmq::error_t& e) {
+            std::cerr << "zmq error process: " << e.what() << "\n";
+            continue;
+        }
+        catch (const std::exception& e) {
             std::cerr << "Fail processing request: " << e.what() << "\n";
+            continue;
+        }
+        catch (...) {
+            std::cerr << "Fail processing request: unknown error\n";
+            continue;
         }
     }
 }
