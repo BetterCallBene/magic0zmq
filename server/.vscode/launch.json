@@ -1,0 +1,28 @@
+{
+
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "C++ server",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/server",
+            "args": ["1"],  //pass arguments to your executable
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/build/environment.sh.env",
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build_server",
+        }
+    ]
+ }

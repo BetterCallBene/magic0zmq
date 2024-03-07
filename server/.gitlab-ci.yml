@@ -1,0 +1,193 @@
+# default.yml defines default jobs (style checks, doc generation, deploy) and
+# default stages, e.g., [ Build, Static Analysis, Test, Deploy ]
+# ref is the corresponding release branch. Replace `<version>` with the current release
+# e.g., ref: 'release/3.x'
+include:
+  - project: "dev/sys/sopl/ar-dev"
+    # release branch
+    ref: "release/3.x"
+    file:
+      - "/ci/templates/default.yml"
+      - "/ci/templates/windows_conan.yml"
+
+variables:
+  AR_DOCS_IMG: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  AR_CI_CONAN_UBUNTU_18_04_DISABLE: "true"
+
+# Override allow_failure or other template variables
+clang_format:
+  image: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  allow_failure: false
+clang_tidy:
+  image: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  allow_failure: false
+cppcheck:
+  image: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  allow_failure: false
+flake8:
+  allow_failure: false
+yapf:
+  allow_failure: false
+
+# TODO: Remove once SOPL-444 is resolved
+.upload_conan_packages_for_ubuntu:
+  - conan remote add -f agile-temporary $CONAN_UPLOAD_TEMP
+  - conan user $CONAN_LOGIN_USERNAME -p $CONAN_PASSWORD -r agile-temporary
+  - export CONAN_PACKAGE_NAME=$(conan inspect --raw name .)
+  - conan upload "$CONAN_PACKAGE_NAME/*" --all -r agile-temporary --confirm
+
+.upload_conan_packages_for_windows:
+  - conan remote add -f agile-temporary $env:CONAN_UPLOAD_TEMP
+  - conan user $env:CONAN_LOGIN_USERNAME -p ${env:CONAN_PASSWORD} -r agile-temporary
+  - $env:CONAN_PACKAGE_NAME=$(conan inspect --raw name .)
+  - conan upload "${env:CONAN_PACKAGE_NAME}/*" --all -r agile-temporary --confirm
+
+"Conan Build Matrix":
+  allow_failure: false
+  after_script:
+    - !reference [ .upload_conan_packages_for_ubuntu ]
+
+"Conan Build - Ubuntu 22.04":
+  allow_failure: false
+  after_script:
+    - !reference [ .upload_conan_packages_for_ubuntu ]
+
+"Conan Matrix Windows":
+  # Running jobs can be canceled by newer pipeline runs
+  interruptible: true
+  after_script:
+    - !reference [ .upload_conan_packages_for_windows ]
+
+.default_rules: &default_rules
+  image: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+Test Coverage:
+  <<: *default_rules
+  stage: Test
+  tags:
+    - Agile_Docker_Managed
+  script:
+    - make test_coverage
+  coverage: /^\s*lines:\s*\d+.\d+\%/
+  artifacts:
+    expire_in: 7 days
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: build/coverage.xml
+    paths:
+      - build/coverage_html/*
+  dependencies: []
+  needs: []
+
+# Ensure that no version is manually updated
+bump2version Test:
+  <<: *default_rules
+  stage: Test
+  dependencies: []
+  needs: []
+  tags:
+    - Agile_Docker_Managed
+  script:
+    # Check if it is possible to bump version
+    # e.g. all versions in files are the same and eq
+    # to version in .bumpversion.cfg
+    - make version_test
+
+# Template job to run unit tests on a conan package that is built at build stages.
+# It consumes a package by downloading it from a registry after the jobs specified
+# in a `needs` section succeed.
+.test_cpp: &test_cpp
+  artifacts:
+    when: always
+    # Optionally enable artifact uploads from the testing jobs.
+    # paths:
+    #  - build/Testing/
+    reports:
+      junit: build/Testing/*_report.xml
+    expire_in: 7 days
+  before_script:
+    # Make sure the line endings are correct so that we have the same conan recipe ID
+    - !reference [.conan_build_matrix, "before_script"]
+  needs:
+    - job: Conan Build Matrix
+      artifacts: true
+      optional: true
+    - job: Conan Deploy Master
+      artifacts: true
+      optional: true
+    - job: Conan Deploy Tag
+      artifacts: true
+      optional: true
+  rules:
+    - if: "$CI_COMMIT_TAG != null"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+  script:
+    - !reference [ .ar_dev_snippets, "_set_conan_package_full_ref" ]
+    # Configure conan to retrieve packages from agile-temporary
+    - echo "Creating conan package 'server-tests' - building tests"
+    - conan remote add agile-temporary ${CONAN_UPLOAD_TEMP}${env:CONAN_UPLOAD_TEMP}
+    - git clean -xdf
+    # By default, conan test package requires CONAN_PACKAGE_FULL_REF env that represents package under test.
+    - make test_with_conan
+  stage: Deploy Test
+  tags:
+    - Agile_Docker_Managed
+    # If your job requires a lot of RAM during compile time, add the Fat_Job tag.
+    # See: https://agile-robots-ag.atlassian.net/wiki/spaces/SoDev/pages/103219328/Continuous+Integration+and+Continuous+Deployment+CI+CD#Fat-Jobs
+    # - Fat_Job
+  timeout: 1h
+
+
+
+"Test C++ :: Ubuntu 22.04":
+  <<: *test_cpp
+  image: artifactory.ar.int:5000/ar-ci-ubuntu:22.04
+  needs:
+    - job: Conan Build - Ubuntu 22.04
+      artifacts: true
+      optional: true
+    - job: Conan Deploy - Ubuntu 22.04
+      artifacts: true
+      optional: true
+  variables:
+    CONAN_OPTIONS: "-s compiler=gcc -s compiler.version=11"
+
+"Test C++ :: Windows":
+  <<: *test_cpp
+  before_script:
+    # Make sure the line endings are correct so that we have the same conan recipe ID
+    - !reference [.windows_build, "before_script"]
+  script:
+    - |
+      if ($env:CI_COMMIT_TAG) {
+        $env:CONAN_USERNAME = ${env:CONAN_USERNAME_FOR_TAG}
+        $env:CONAN_CHANNEL = ${env:CONAN_CHANNEL_FOR_TAG}
+      }
+    # Configure conan to retrieve packages from agile-temporary
+    - conan remote add agile-temporary $env:CONAN_UPLOAD_TEMP
+    # Clean up the working directory to avoid having untracked files (SOPL-322)
+    - git clean -xdf
+    - powershell -Command "make test_with_conan"
+  image: artifactory.ar.int:5000/ar-ci-windows:ltsc2022
+  needs:
+    - job: Conan Matrix Windows
+      artifacts: true
+      optional: true
+    - job: Conan Master Windows
+      artifacts: true
+      optional: true
+    - job: Conan Tag Windows
+      artifacts: true
+      optional: true
+  tags:
+    - Agile_Windows_Managed
+  timeout: 30m

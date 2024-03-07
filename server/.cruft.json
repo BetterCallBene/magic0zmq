@@ -1,0 +1,23 @@
+{
+  "template": "git@git.ar.int:sd/templates/cookiecutter-cpp.git",
+  "commit": "c99b8476df9f83d726c51bf435ef24e2332b1401",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "server",
+      "project_slug": "server",
+      "__project_name_clean": "server",
+      "__project_name_clean_upper": "SERVER",
+      "description": "zmq server",
+      "author_name": "Benedikt Koenig",
+      "gitlab_user": "b.koenig",
+      "team_group": "PEAC MV",
+      "repo_slug": "sd/peac/mv/server",
+      "auto_build": true,
+      "build_docker_run_container": false,
+      "ci_conan_ubuntu_18_disable": true,
+      "_template": "git@git.ar.int:sd/templates/cookiecutter-cpp.git"
+    }
+  },
+  "directory": null
+}

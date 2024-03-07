@@ -1,0 +1,62 @@
+{
+    "name": "server-dev",
+    "build": {
+        "dockerfile": "./Dockerfile",
+        "context": "."
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "username": "vscode",
+            "userUid": "1000",
+            "userGid": "1000",
+            "upgradePackages": "true"
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+            "version": "latest",
+            "ppa": "false"
+        }
+    },
+    "forwardPorts": [
+        5555
+    ],
+    "containerUser": "vscode",
+    "customizations": {
+        "vscode": {
+            // share commonly used VS Code extensions with team members
+            "extensions": [
+                // Just to track system resources in VS code status bar
+                "mutantdino.resourcemonitor",
+                // In order to format CPP code according to AR clang-format style
+                "xaver.clang-format",
+                // CMake syntax highlight
+                "twxs.cmake",
+                // CPP stuff...
+                "ms-vscode.cpptools",
+                // Python stuff...
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ],
+            "settings": {
+                "remote.autoForwardPorts": false,
+                "[cpp]": {
+                    "editor.defaultFormatter": "xaver.clang-format"
+                },
+                "clang-format.style": "file",
+                "editor.formatOnSave": true,
+                // Ensure proper file endings
+                "files.insertFinalNewline": true,
+                "files.eol": "\n",
+                // Extend include directories with Conan package includes and generated headers
+                "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+                // Disable modifying .vscode/settings.json with CPP file associations
+                "C_Cpp.autoAddFileAssociations": false,
+                // Ensure that bash is used by the default
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        },
+        "devpod": {
+            "prebuildRepository": "artifactory.ar.int:5011/workspaces/sd/peac/mv/server"
+        }
+    },
+    "postCreateCommand": "conan config install http://artifactory.ar.int/artifactory/MU-AR_BIN_PRODUCTION/config/conan_config_ubuntu22.zip"
+}

@@ -1,0 +1,2 @@
+# clang-tidy has issues with files which are not in the compile commands
+^test_package/*

@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+# Check for existing export.cmake. This is required for conan workspaces since there the export.cmake file does not
+# exist on the first run.
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/ar-example-export.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/ar-example-export.cmake")
+endif()
+
+check_required_components(ar-example)

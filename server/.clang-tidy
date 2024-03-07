@@ -1,0 +1,7 @@
+---
+Checks:          'clang-diagnostic-*,clang-analyzer-*,performance-*,readability-*,modernize-*,-modernize-use-trailing-return-type,cppcoreguidelines-*,bugprone-*,-modernize-use-auto'
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+AnalyzeTemporaryDtors: false
+...
+
